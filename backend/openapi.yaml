@@ -1,0 +1,241 @@
+openapi: 3.0.3
+info:
+  title: Veyturn Business and Queue API
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /auth/me/:
+    get:
+      summary: Get the authenticated user profile
+      responses:
+        '200': {description: User profile}
+    patch:
+      summary: Update full name and optionally change password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name: {type: string}
+                current_password: {type: string, format: password}
+                new_password: {type: string, format: password}
+      responses:
+        '200': {description: Updated user profile}
+        '400': {description: Invalid name, password, or current password}
+  /businesses/:
+    get:
+      summary: Discover businesses ranked by the caller's location
+      parameters:
+        - {name: lat, in: query, required: true, schema: {type: number, format: double}}
+        - {name: lng, in: query, required: true, schema: {type: number, format: double}}
+        - {name: category, in: query, schema: {type: string}}
+        - {name: search, in: query, schema: {type: string}}
+        - {name: filter, in: query, schema: {type: string, enum: [all, open, near_me, popular]}}
+      responses:
+        '200': {description: Distance-ranked discovery results}
+        '400': {description: Invalid or missing coordinates}
+    post:
+      summary: Register the authenticated user's single business
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [name, category, city, address, phone, latitude, longitude, branch_name, branch_address, operating_days, opens_at, closes_at, services]
+              properties:
+                name: {type: string}
+                category: {type: string}
+                city: {type: string}
+                address: {type: string}
+                phone: {type: string}
+                latitude: {type: number}
+                longitude: {type: number}
+                branch_name: {type: string}
+                branch_address: {type: string}
+                operating_days: {type: string, description: JSON array using Monday=0 through Sunday=6}
+                opens_at: {type: string, format: time}
+                closes_at: {type: string, format: time}
+                maximum_queue_size: {type: integer, default: 50}
+                services: {type: string, description: JSON array of service names or service objects}
+                image: {type: string, format: binary}
+      responses:
+        '201': {description: Business created}
+        '409': {description: Owner already has a business}
+  /businesses/mine/:
+    get:
+      summary: Get the authenticated owner's business
+      responses:
+        '200': {description: Business object or null}
+  /businesses/{id}/:
+    get:
+      summary: Get live business, service, queue and distance details
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: lat, in: query, schema: {type: number}}
+        - {name: lng, in: query, schema: {type: number}}
+      responses:
+        '200': {description: Business details}
+        '404': {description: Business not found}
+  /businesses/{id}/queue/join/:
+    post:
+      summary: Join a business queue atomically
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [service_id]
+              properties: {service_id: {type: string, format: uuid}}
+      responses:
+        '201': {description: Active queue entry with calculated position and wait}
+        '400': {description: Invalid service or full queue}
+        '409': {description: This user already has an active entry in this business queue}
+  /businesses/{id}/queue/active/:
+    get:
+      summary: Get the authenticated customer's active entry for one business
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Matching active queue entry or null}
+  /businesses/{id}/saved/:
+    post:
+      summary: Save a business for the authenticated user
+      responses:
+        '200': {description: Business saved}
+    delete:
+      summary: Remove a business from the authenticated user's saved businesses
+      responses:
+        '200': {description: Business removed from saved businesses}
+  /businesses/saved/:
+    get:
+      summary: List the authenticated user's saved businesses newest first
+      responses:
+        '200': {description: Saved business list including image URLs and live queue data}
+  /businesses/queue/active/:
+    get:
+      summary: Get the authenticated customer's active queue entry
+      responses:
+        '200': {description: Queue entry or null}
+  /businesses/queue/entries/{entry_id}/:
+    get:
+      summary: Get the authenticated customer's queue entry including its final status
+      parameters:
+        - {name: entry_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Queue entry in waiting, serving, completed, or cancelled state}
+        '404': {description: Entry does not belong to the authenticated customer}
+  /businesses/queue/history/:
+    get:
+      summary: List the authenticated customer's completed and cancelled visits
+      responses:
+        '200': {description: Visit history with business, service, status, and rating}
+  /businesses/queue/entries/{entry_id}/rating/:
+    post:
+      summary: Rate a completed visit and recalculate the business rating
+      parameters:
+        - {name: entry_id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [score]
+              properties: {score: {type: integer, minimum: 1, maximum: 5}}
+      responses:
+        '200': {description: Rated queue entry}
+        '400': {description: Visit is not completed or rating is invalid}
+  /businesses/queue/entries/{entry_id}/cancel/:
+    post:
+      summary: Let the authenticated customer leave an active queue
+      parameters:
+        - {name: entry_id, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200': {description: Cancelled queue entry}
+        '400': {description: Queue entry is already closed}
+        '404': {description: Entry does not belong to the authenticated customer}
+  /businesses/owner/queue/:
+    get:
+      summary: List the authenticated owner's live waiting and serving queue
+      responses:
+        '200': {description: Live queue entries with customer and service details}
+        '400': {description: The authenticated user has no business}
+  /businesses/owner/queue/{entry_id}/action/:
+    post:
+      summary: Call, complete, or remove a customer from the owner's queue
+      parameters:
+        - {name: entry_id, in: path, required: true, schema: {type: string, format: uuid}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action: {type: string, enum: [serve, complete, cancel]}
+      responses:
+        '200': {description: Updated queue entry}
+        '400': {description: Invalid action or queue state}
+        '404': {description: Queue entry does not belong to this owner}
+        '409': {description: Another customer is currently being served}
+  /businesses/owner/customers/:
+    get:
+      summary: List real customer visit history for the authenticated owner's business
+      responses:
+        '200': {description: Up to 200 latest customer queue records}
+  /businesses/owner/analytics/:
+    get:
+      summary: Calculate the authenticated owner's analytics from real queue records
+      responses:
+        '200': {description: Visit totals, active queue, average wait, and top services}
+  /businesses/owner/status/:
+    post:
+      summary: Open or close the authenticated owner's business
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_active]
+              properties: {is_active: {type: boolean}}
+      responses:
+        '200': {description: Updated business}
+        '400': {description: Invalid status value or owner has no business}
+  /businesses/locations/search/:
+    get:
+      summary: Return debounced address suggestions from the configured geocoder
+      security: []
+      parameters:
+        - {name: q, in: query, required: true, schema: {type: string, minLength: 3}}
+        - {name: lat, in: query, schema: {type: number}}
+        - {name: lng, in: query, schema: {type: number}}
+      responses:
+        '200': {description: Up to five normalized address suggestions}
+        '503': {description: Geocoder temporarily unavailable}
+  /businesses/locations/reverse/:
+    get:
+      summary: Convert current coordinates to an address
+      security: []
+      parameters:
+        - {name: lat, in: query, required: true, schema: {type: number}}
+        - {name: lng, in: query, required: true, schema: {type: number}}
+      responses:
+        '200': {description: Normalized current address}
+        '404': {description: No matching address}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
