@@ -52,10 +52,12 @@ DEFAULT_FROM_EMAIL=Veyturn <noreply@example.com>
 Run migrations once after connecting the production database, and after every deployment that contains new migrations. Use a trusted local/CI environment loaded with the Production variables:
 
 ```bash
-python manage.py migrate --noinput
+DATABASE_URL=<production-url> python manage.py migrate --noinput
 ```
 
 Do not run Preview migrations against the Production database.
+When `DATABASE_URL` is present it takes priority over the local `DB_ENGINE=sqlite`
+setting, so the migration targets the database identified by that URL.
 
 ## Verification
 

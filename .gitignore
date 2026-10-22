@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 !.env.*.example
+.vercel/
 *.pem
 *.key
 *.p8
@@ -98,4 +99,3 @@ test-results/
 playwright-report/
 *.orig
 *.rej
-

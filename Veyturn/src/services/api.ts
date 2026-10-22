@@ -1,7 +1,9 @@
 import {Platform} from 'react-native';
 
 const DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
-export const API_BASE_URL = __DEV__ ? `http://${DEV_HOST}:8000/api/v1` : 'https://api.veyturn.com/api/v1';
+export const API_BASE_URL = __DEV__
+  ? `http://${DEV_HOST}:8000/api/v1`
+  : 'https://veyturn-api.vercel.app/api/v1';
 
 type RequestOptions = {method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'; body?: unknown; accessToken?: string; authRetry?: boolean};
 type TokenRefreshHandler = () => Promise<string>;

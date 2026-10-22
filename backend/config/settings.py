@@ -44,7 +44,7 @@ ASGI_APPLICATION = 'config.asgi.application'
 
 DATABASE_URL = os.getenv('DATABASE_URL')
 
-if 'test' in sys.argv or os.getenv('DB_ENGINE') == 'sqlite':
+if 'test' in sys.argv:
     DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3'}}
 elif DATABASE_URL:
     DATABASES = {
@@ -55,6 +55,8 @@ elif DATABASE_URL:
             ssl_require=not DEBUG,
         )
     }
+elif os.getenv('DB_ENGINE') == 'sqlite':
+    DATABASES = {'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3'}}
 else:
     DATABASES = {'default': {
         'ENGINE': 'django.db.backends.postgresql',
