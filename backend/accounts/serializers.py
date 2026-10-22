@@ -86,8 +86,14 @@ class LoginSerializer(serializers.Serializer):
             except DjangoValidationError:
                 pass
         user = User.objects.filter(Q(email__iexact=identifier) | Q(phone_number=phone)).first()
-        if not user or not user.check_password(attrs['password']) or not user.is_active:
-            raise serializers.ValidationError({'detail': 'Invalid email/phone number or password.'})
+        if not user:
+            raise serializers.ValidationError({
+                'detail': 'No account was found with this email or phone number. Please create an account first.'
+            })
+        if not user.is_active:
+            raise serializers.ValidationError({'detail': 'This account is inactive. Please contact support.'})
+        if not user.check_password(attrs['password']):
+            raise serializers.ValidationError({'detail': 'Incorrect password. Please try again.'})
         attrs['user'] = user
         return attrs
 

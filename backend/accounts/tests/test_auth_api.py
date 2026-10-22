@@ -28,6 +28,29 @@ class AuthenticationApiTests(APITestCase):
             self.assertEqual(response.status_code, status.HTTP_200_OK)
             self.assertIn('access', response.data)
 
+    def test_login_distinguishes_unknown_account_and_wrong_password(self):
+        unknown = self.client.post(
+            reverse('login'),
+            {'identifier': 'missing@example.com', 'password': PASSWORD},
+            format='json',
+        )
+        self.assertEqual(unknown.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('No account was found', unknown.data['detail'][0])
+
+        User.objects.create_user(
+            email='test@example.com',
+            phone_number='+923001234567',
+            full_name='Test User',
+            password=PASSWORD,
+        )
+        incorrect = self.client.post(
+            reverse('login'),
+            {'identifier': 'test@example.com', 'password': 'WrongPass2!'},
+            format='json',
+        )
+        self.assertEqual(incorrect.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Incorrect password', incorrect.data['detail'][0])
+
     def test_duplicate_email_and_phone_are_rejected(self):
         self.client.post(reverse('register'), self.registration_payload(), format='json')
         response = self.client.post(reverse('register'), self.registration_payload(), format='json')

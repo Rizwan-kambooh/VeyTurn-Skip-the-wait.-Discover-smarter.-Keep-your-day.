@@ -1,5 +1,5 @@
-import React, {useEffect, useState} from 'react';
-import {Pressable, StyleSheet, Text, View} from 'react-native';
+import React, {useCallback, useEffect, useState} from 'react';
+import {AppState, Pressable, StyleSheet, Text, View} from 'react-native';
 import {NativeStackScreenProps} from '@react-navigation/native-stack';
 import {AppButton} from '../components/AppButton';
 import {AuthLayout} from '../components/AuthLayout';
@@ -11,6 +11,7 @@ import {FormError} from '../components/FormError';
 import {useToast} from '../components/Toast';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'VerifyCode'>;
+const RESEND_COOLDOWN_SECONDS = 60;
 
 export function VerifyCodeScreen({navigation, route}: Props) {
   const {showToast} = useToast();
@@ -19,13 +20,31 @@ export function VerifyCodeScreen({navigation, route}: Props) {
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState('');
   const [resendLoading, setResendLoading] = useState(false);
-  const [cooldown, setCooldown] = useState(60);
+  const [resendAvailableAt, setResendAvailableAt] = useState(
+    () => Date.now() + RESEND_COOLDOWN_SECONDS * 1000,
+  );
+  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
+
+  const refreshCooldown = useCallback(() => {
+    setCooldown(Math.max(0, Math.ceil((resendAvailableAt - Date.now()) / 1000)));
+  }, [resendAvailableAt]);
+
+  const startCooldown = (seconds = RESEND_COOLDOWN_SECONDS) => {
+    setResendAvailableAt(Date.now() + seconds * 1000);
+    setCooldown(seconds);
+  };
 
   useEffect(() => {
-    if (cooldown <= 0) return;
-    const timer = setInterval(() => setCooldown(value => Math.max(0, value - 1)), 1000);
-    return () => clearInterval(timer);
-  }, [cooldown]);
+    refreshCooldown();
+    const timer = setInterval(refreshCooldown, 1000);
+    const subscription = AppState.addEventListener('change', state => {
+      if (state === 'active') refreshCooldown();
+    });
+    return () => {
+      clearInterval(timer);
+      subscription.remove();
+    };
+  }, [refreshCooldown]);
 
   const verify = async () => {
     setSubmitted(true);
@@ -54,12 +73,16 @@ export function VerifyCodeScreen({navigation, route}: Props) {
       setResendLoading(true);
       await apiRequest('/auth/password-reset/request/', {method: 'POST', body: {email: route.params.email}});
       setCode('');
-      setCooldown(60);
+      startCooldown();
       showToast('A new verification code has been sent.', 'success');
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Unable to resend the code.';
       setServerError(message);
-      if (error instanceof ApiError && error.status === 429) setCooldown(60);
+      if (error instanceof ApiError && error.status === 429) {
+        const details = error.details as {retry_after?: unknown} | null;
+        const retryAfter = Number(details?.retry_after);
+        startCooldown(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : RESEND_COOLDOWN_SECONDS);
+      }
       showToast(message, 'error');
     } finally {
       setResendLoading(false);
